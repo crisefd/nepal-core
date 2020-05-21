@@ -72,6 +72,7 @@ export abstract class AlCardstackView< EntityType=any,
      * Starts loading the view and digesting data
      */
     public async start() {
+        debugger;
         this.loadedPages = 0;
         this.remainingPages = 0;
         this.continuation = undefined;
@@ -84,6 +85,7 @@ export abstract class AlCardstackView< EntityType=any,
                 const characteristics = await this.generateCharacteristics();
                 this.normalizeCharacteristics( characteristics );
                 if (this.characteristics.localPagination) {
+                    debugger;
                     this.fillPropertiesReduceFilters();
                 }
             }
@@ -139,6 +141,7 @@ export abstract class AlCardstackView< EntityType=any,
      * Starts loading next batch data into view
      */
     public async continue() {
+        debugger;
         this.loading = true;
         try {
             let entities :EntityType[] = [];
@@ -174,6 +177,7 @@ export abstract class AlCardstackView< EntityType=any,
      * @param total items
      */
     public resetPagination(total:number){
+        debugger;
         if(this.itemsPerPage) {
             this.loadedPages = 0;
             this.remainingPages = total / this.itemsPerPage;
@@ -470,6 +474,7 @@ export abstract class AlCardstackView< EntityType=any,
     }
 
     protected addNextSection( newData: AlCardstackItem<EntityType,PropertyType>[] ) {
+        debugger;
         this.cards = [ ...this.cards, ...newData ];
         this.cards.forEach( c => this.evaluateCardState( c ) );
         this.visibleCards = this.cards.reduce( ( count, card ) => count + ( card.visible ? 1 : 0 ), 0 );
@@ -480,6 +485,7 @@ export abstract class AlCardstackView< EntityType=any,
     }
 
     protected ingest( entities:EntityType[] ): AlCardstackItem<EntityType>[] {
+        debugger;
         let discoveredValues:boolean = false;
         let results:AlCardstackItem<EntityType>[] = entities.map(entity => {
             const properties = this.deriveEntityProperties(entity);
