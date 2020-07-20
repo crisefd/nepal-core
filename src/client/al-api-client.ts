@@ -49,14 +49,20 @@ import {
 import { AlClientBeforeRequestEvent } from './events';
 import { AIMSSessionDescriptor } from '../aims-client/types';
 
-export type AlEndpointsServiceCollection = {[serviceName:string]:string};
+export type AlEndpointsServiceCollection = {
+    [serviceName:string]: {
+        [residency:string]:{
+            [endpointHost:string]:string
+        }
+    }
+};
 
 export class AlApiClient
 {
   /**
    * The following list of services are the ones whose endpoints will be resolved by default.  Added globally/commonly used services here for optimized API performance.
    */
-  protected static defaultServiceList = [ "aims", "subscriptions", "search", "sources", "assets_query", "assets_write", "dashboards", "iris", "suggestions", "cargo", "connectors"];
+  protected static defaultServiceList = [ "aims", "subscriptions", "search", "sources", "assets_query", "assets_write", "dashboards", "iris", "suggestions", "cargo", "connectors", "herald" ];
   protected static defaultServiceParams = {
     service_stack:      AlLocation.InsightAPI,  //  May also be AlLocation.GlobalAPI, AlLocation.EndpointsAPI, or ALLocation.LegacyUI
     residency:          'default',              //  "us" or "emea" or "default"
@@ -530,7 +536,10 @@ export class AlApiClient
    */
   public async getServiceEndpoints( accountId:string, requestList?:string[] ):Promise<AlEndpointsServiceCollection> {
     const environment = AlLocatorService.getCurrentEnvironment();
+    const context = AlLocatorService.getContext();
+    console.log(context.residency);
     const cacheKey = `/endpoints/${environment}/${accountId}`;
+
     if ( ! requestList ) {
       requestList = AlApiClient.defaultServiceList;
     }
@@ -543,7 +552,7 @@ export class AlApiClient
     }
     const endpointsRequest:APIRequestParams = {
       method: "POST",
-      url: AlLocatorService.resolveURL( AlLocation.GlobalAPI, `/endpoints/v1/${accountId}/residency/default/endpoints` ),
+      url: AlLocatorService.resolveURL( AlLocation.GlobalAPI, `/endpoints/v1/${accountId}/endpoints` ),
       data: requestList,
       aimsAuthHeader: true
     };
@@ -551,8 +560,16 @@ export class AlApiClient
               .then( response => {
                   existingEndpoints = this.getCachedValue<AlEndpointsServiceCollection>( cacheKey );        //    retrieve cache again, in case it has been modified by others
                   let translated:AlEndpointsServiceCollection = deepMerge( {}, existingEndpoints );
-                  Object.entries( response.data as AlEndpointsServiceCollection ).forEach( ( [ serviceName, endpointHost ] ) => {
-                    translated[serviceName] = ( endpointHost as string ).startsWith( "http") ? endpointHost : `https://${endpointHost}`;        // ensure that all domains are prefixed with protocol
+                  Object.entries( response.data as AlEndpointsServiceCollection ).forEach( ( [ serviceName, residencyLocations ] ) => {
+                      Object.entries(residencyLocations).forEach(([residencyName, endpointHost]) => {
+                          Object.entries(endpointHost).forEach(([endpointHostId, endpointHost]) => {
+                              translated[serviceName] = {
+                                [residencyName]: {
+                                    [endpointHostId]: (endpointHost as string).startsWith("http") ? endpointHost : `https://${endpointHost}` // ensure that all domains are prefixed with protocol
+                                }
+                              };
+                          });
+                      });
                   } );
                   this.setCachedValue( cacheKey, translated, 15 * 60 * 1000 );
                   return translated;
@@ -560,7 +577,15 @@ export class AlApiClient
                 console.warn(`Could not retrieve data for endpoints for [${requestList.join(",")}]; using defaults for environment '${AlLocatorService.getCurrentEnvironment()}'; disabling caching` );
                 existingEndpoints = this.getCachedValue<AlEndpointsServiceCollection>( cacheKey );
                 let serviceLocations:AlEndpointsServiceCollection = deepMerge( {}, existingEndpoints );
-                requestList.forEach( serviceId => { serviceLocations[serviceId] = AlLocatorService.resolveURL( AlLocation.InsightAPI ); } );
+                requestList.forEach( serviceId => {
+                    if(!serviceLocations.hasOwnProperty(serviceId)) {
+                        serviceLocations[serviceId] = {};
+                    }
+                    if(serviceLocations.hasOwnProperty(serviceId) && !serviceLocations[serviceId].hasOwnProperty(context.residency)) {
+                        serviceLocations[serviceId][context.residency] = {};
+                    }
+                    serviceLocations[serviceId][context.residency][context.insightLocationId]= AlLocatorService.resolveURL( AlLocation.InsightAPI );
+                } );
                 return Promise.resolve( serviceLocations );
               } );
   }
@@ -637,13 +662,21 @@ export class AlApiClient
 
   protected async calculateRequestURL( params: APIRequestParams ):Promise<string> {
     let fullPath:string = null;
+    const context = AlLocatorService.getContext();
     if ( ! params.noEndpointsResolution
            && ( params.target_endpoint || ( params.service_name && params.service_stack === AlLocation.InsightAPI ) ) ) {
       // Utilize the endpoints service to determine which location to use for this service/account pair
       const serviceEndpointId = params.target_endpoint || params.service_name;
       const serviceCollection = await this.prepare( params );
       if ( serviceEndpointId in serviceCollection ) {
-        fullPath = serviceCollection[serviceEndpointId];
+        // Any global service entries returned are always stored in a global -> insight-global nested property
+        if(serviceCollection[params.service_name]['global']) {
+            fullPath = serviceCollection[params.service_name]['global']['insight-global'];
+        } else {
+            if(serviceCollection[params.service_name][context.residency] && serviceCollection[params.service_name][context.residency][context.insightLocationId]){
+                fullPath = serviceCollection[params.service_name][context.residency][context.insightLocationId];
+            }
+        }
       }
     }
     if ( ! fullPath ) {
