@@ -70,15 +70,16 @@ export class AlApiClient
     ttl:                false                   //  Default to no caching
   };
 
-  public events:AlTriggerStream = new AlTriggerStream();
-  public verbose:boolean = false;
-  public collectRequestLog:boolean = false;
-  public mockMode:boolean = false;              //  If true, requests will be normalized but not actually dispatched.
-  public defaultAccountId:string = null;        //  If specified, uses *this* account ID to resolve endpoints if no other account ID is explicitly specified
+  public events:AlTriggerStream     =   new AlTriggerStream();
+  public verbose:boolean            =   false;
+  public collectRequestLog:boolean  =   false;
+  public mockMode:boolean           =   false;              //  If true, requests will be normalized but not actually dispatched.
+  public defaultAccountId:string    =   null;        //  If specified, uses *this* account ID to resolve endpoints if no other account ID is explicitly specified
 
-  private storage = AlCabinet.local( 'apiclient.cache' );
+  private storage                   =   AlCabinet.local( 'apiclient.cache' );
+  private persistentStorage         =   AlCabinet.persistent( 'apiclient.pcache' );
   private endpointResolution: {[environment:string]:{[accountId:string]:Promise<AlEndpointsServiceCollection>}} = {};
-  private instance:AxiosInstance = null;
+  private instance:AxiosInstance    =   null;
   private lastError:{ status:number, statusText:string, url:string, data:string, headers:{[header:string]:any} } = null;
 
   /* Default request parameters */
@@ -166,7 +167,9 @@ export class AlApiClient
     if ( cacheTTL && ! normalized.disableCache ) {
       let cachedValue = this.getCachedValue( fullUrl );
       if ( cachedValue ) {
-        this.log(`APIClient::XHR GET ${fullUrl} (from cache)` );
+        if ( this.verbose ) {
+          console.log(`APIClient::XHR GET ${fullUrl} (from cache)` );
+        }
         return {
           data: cachedValue,
           status: 200,
@@ -178,6 +181,9 @@ export class AlApiClient
     }
     //  Check for existing in-flight requests for this resource
     if ( this.transientReadCache.hasOwnProperty( cacheKey ) ) {
+      if ( this.verbose ) {
+        console.log(`APIClient::XHR GET Re-using inflight retrieval [${fullUrl}]` );
+      }
       const result = await this.transientReadCache[cacheKey];
       return result;
     }
@@ -191,9 +197,13 @@ export class AlApiClient
       const duration = completed - start;
       if ( cacheTTL && ! normalized.disableCache ) {
         this.setCachedValue( cacheKey, response.data, cacheTTL );
-        this.log(`APIClient::XHR GET [${fullUrl}] in ${duration}ms (to cache, ${cacheTTL}ms)` );
+        if ( this.verbose ) {
+          console.log(`APIClient::XHR GET [${fullUrl}] in ${duration}ms (to cache, ${cacheTTL}ms)` );
+        }
       } else {
-        this.log(`APIClient::XHR GET [${fullUrl} in ${duration}ms (nocache)` );
+        if ( this.verbose ) {
+          console.log(`APIClient::XHR GET [${fullUrl} in ${duration}ms (nocache)` );
+        }
       }
 
       if (this.collectRequestLog || this.verbose) {
@@ -204,7 +214,9 @@ export class AlApiClient
           responseContentLength: +response.headers['content-length'],
           durationMs: duration
         };
-        this.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
+        if ( this.verbose ) {
+          console.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
+        }
 
         if (this.collectRequestLog) {
           this.executionRequestLog.push(logItem);
@@ -213,7 +225,9 @@ export class AlApiClient
 
       return response;
     } catch( e ) {
-      this.log(`APIClient::XHR GET [${fullUrl}] (FAILED, ${e["message"]})` );
+      if ( this.verbose ) {
+        console.log(`APIClient::XHR GET [${fullUrl}] (FAILED, ${e["message"]})` );
+      }
       throw e;
     } finally {
       delete this.transientReadCache[cacheKey];
@@ -353,7 +367,9 @@ export class AlApiClient
         this.executionRequestLog.push(logItem);
       }
 
-      this.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
+      if ( this.verbose ) {
+        console.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
+      }
 
     } catch( e ) {
       if (this.collectRequestLog) {
@@ -363,7 +379,9 @@ export class AlApiClient
         logItem.durationMs = duration;
         logItem.errorMessage = e["message"];
       }
-      this.log(`APIClient::XHR FAILED ${JSON.stringify(logItem)}`);
+      if ( this.verbose ) {
+        console.log(`APIClient::XHR FAILED ${JSON.stringify(logItem)}`);
+      }
       throw e;
     }
 
@@ -542,7 +560,7 @@ export class AlApiClient
     if ( ! requestList ) {
       requestList = AlApiClient.defaultServiceList;
     }
-    let existingEndpoints = this.getCachedValue<AlEndpointsServiceCollection>( cacheKey );
+    let existingEndpoints = this.persistentStorage.get( cacheKey, null ) as AlEndpointsServiceCollection;
     if ( existingEndpoints ) {
         if ( ! requestList.find( serviceName => ! existingEndpoints.hasOwnProperty( serviceName ) ) ) {
             return existingEndpoints;   //  we already have all of the requested service in cache!  Yay!
@@ -557,7 +575,7 @@ export class AlApiClient
     };
     return this.axiosRequest( endpointsRequest )
               .then( response => {
-                  existingEndpoints = this.getCachedValue<AlEndpointsServiceCollection>( cacheKey );        //    retrieve cache again, in case it has been modified by others
+                  existingEndpoints = this.persistentStorage.get( cacheKey, {} ) as AlEndpointsServiceCollection; //    retrieve cache again, in case it has been modified by others
                   let translated:AlEndpointsServiceCollection = deepMerge( {}, existingEndpoints );
                   Object.entries( response.data as AlEndpointsServiceCollection ).forEach( ( [ serviceName, residencyLocations ] ) => {
                       Object.entries(residencyLocations).forEach(([residencyName, residencyHost]) => {
@@ -570,11 +588,11 @@ export class AlApiClient
                           });
                       });
                   } );
-                  this.setCachedValue( cacheKey, translated, 15 * 60 * 1000 );
+                  this.persistentStorage.set( cacheKey, translated, 15 * 60 );
                   return translated;
               }, error => {
                 console.warn(`Could not retrieve data for endpoints for [${requestList.join(",")}]; using defaults for environment '${AlLocatorService.getCurrentEnvironment()}'; disabling caching` );
-                existingEndpoints = this.getCachedValue<AlEndpointsServiceCollection>( cacheKey );
+                existingEndpoints = this.persistentStorage.get( cacheKey, {} ) as AlEndpointsServiceCollection;
                 let serviceLocations:AlEndpointsServiceCollection = deepMerge( {}, existingEndpoints );
                 requestList.forEach( serviceId => {
                     if(!serviceLocations.hasOwnProperty(serviceId)) {
@@ -793,7 +811,9 @@ export class AlApiClient
         //  TODO: not quite sure...
         console.error(`APIClient Warning: received ${errorResponse.status} from API request [${errorResponse.config.method} ${errorResponse.config.url}]`);
     }
-    this.log( `APIClient Failed Request Snapshot: ${JSON.stringify( this.lastError, null, 4 )}` );
+    if ( this.verbose ) {
+      console.log( `APIClient Failed Request Snapshot: ${JSON.stringify( this.lastError, null, 4 )}` );
+    }
     return Promise.reject( errorResponse );
   }
 
@@ -925,28 +945,6 @@ export class AlApiClient
       return false;
     }
     return true;
-  }
-
-  private log( text:string, ...otherArgs:any[] ) {
-      if ( this.verbose ) {
-          console.log.apply( console, (arguments as any) );
-      }
-  }
-
-  /**
-   * Performs a shallow merge from any number of source objects to a single target object, and returns that target object.
-   * Essentially a cheap-and-easy replacement for Object.assign.
-   */
-  private merge( target:any, ...sources:any[] ):any {
-    sources.forEach( source => {
-      if ( typeof( source ) !== 'object' || source === null ) {
-        return;
-      }
-      Object.entries( source ).forEach( ( [ key, value ] ) => {
-        target[key] = value;
-      } );
-    } );
-    return target;
   }
 }
 
