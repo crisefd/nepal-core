@@ -946,6 +946,22 @@ export class AlApiClient
     }
     return true;
   }
+
+  /**
+   * Performs a shallow merge from any number of source objects to a single target object, and returns that target object.
+   * Essentially a cheap-and-easy replacement for Object.assign.
+   */
+  private merge( target:any, ...sources:any[] ):any {
+    sources.forEach( source => {
+      if ( typeof( source ) !== 'object' || source === null ) {
+        return;
+      }
+      Object.entries( source ).forEach( ( [ key, value ] ) => {
+        target[key] = value;
+      } );
+    } );
+    return target;
+  }
 }
 
 /* tslint:disable:variable-name */
