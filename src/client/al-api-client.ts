@@ -725,19 +725,19 @@ export class AlApiClient
   protected async calculateRequestURL( params: APIRequestParams ):Promise<string> {
     let fullPath:string = null;
     const context = AlLocatorService.getContext();
+    const serviceEndpointId = params.target_endpoint || params.service_name;
     if ( ! params.noEndpointsResolution
            && ! AlRuntimeConfiguration.getOption<boolean>( ConfigOption.DisableEndpointsResolution, false )
            && ( params.target_endpoint || ( params.service_name && params.service_stack === AlLocation.InsightAPI ) ) ) {
       // Utilize the endpoints service to determine which location to use for this service/account pair
-      const serviceEndpointId = params.target_endpoint || params.service_name;
       const serviceCollection = await this.prepare( params );
       if ( serviceEndpointId in serviceCollection ) {
         // Any global service entries returned are always stored in a global -> insight-global nested property
-        if(serviceCollection[params.service_name]['global']) {
-            fullPath = serviceCollection[params.service_name]['global']['insight-global'];
+        if(serviceCollection[serviceEndpointId]['global']) {
+            fullPath = serviceCollection[serviceEndpointId]['global']['insight-global'];
         } else {
-            if(serviceCollection[params.service_name][context.residency] && serviceCollection[params.service_name][context.residency][context.insightLocationId]){
-                fullPath = serviceCollection[params.service_name][context.residency][context.insightLocationId];
+            if(serviceCollection[serviceEndpointId][context.residency] && serviceCollection[serviceEndpointId][context.residency][context.insightLocationId]){
+                fullPath = serviceCollection[serviceEndpointId][context.residency][context.insightLocationId];
             }
         }
       }
