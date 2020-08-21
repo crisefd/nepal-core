@@ -580,11 +580,12 @@ export class AlApiClient
                   Object.entries( response.data as AlEndpointsServiceCollection ).forEach( ( [ serviceName, residencyLocations ] ) => {
                       Object.entries(residencyLocations).forEach(([residencyName, residencyHost]) => {
                           Object.entries(residencyHost).forEach(([endpointHostId, endpointHost]) => {
-                              translated[serviceName] = {
-                                [residencyName]: {
-                                    [endpointHostId]: (endpointHost as string).startsWith("http") ? endpointHost : `https://${endpointHost}` // ensure that all domains are prefixed with protocol
-                                }
-                              };
+                            if(!translated.hasOwnProperty(serviceName)) {
+                                translated[serviceName] = {};
+                            }
+                            translated[serviceName][residencyName] = {
+                                [endpointHostId]: (endpointHost as string).startsWith("http") ? endpointHost : `https://${endpointHost}` // ensure that all domains are prefixed with protocol
+                            };
                           });
                       });
                   } );
