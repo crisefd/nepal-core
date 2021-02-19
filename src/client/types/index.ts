@@ -120,6 +120,4 @@ export interface APIRequestParams extends AxiosRequestConfig {
     * @deprecated If provided, is simply copied to axios' `responseType` property
     */
     response_type?: string;
-
-    resolveEndpointsByResidency?: boolean;
 }
