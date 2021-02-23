@@ -830,7 +830,7 @@ export class AlApiClient implements AlValidationSchemaProvider
                 let host = endpointHost as string;
                 host = host.startsWith("http") ? host : `https://${host}`;      //  ensuring domains are prefixed with protocol
                 setJsonPath( this.endpointCache,
-                             [ context.environment, accountId, serviceName, context.residency ],
+                             [ context.environment, accountId, serviceName, residencyName ],
                              host );
               } );
           } );
