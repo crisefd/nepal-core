@@ -687,6 +687,47 @@ export class AlApiClient implements AlValidationSchemaProvider
     return commonTypeSchematics[schemaId];
   }
 
+  /**
+   * Resolves accumulated endpoints data for the given account.
+   *
+   * Update Feb 2021
+   * ---------------
+   * This has been overhauled to deal with services whose endpoints now must be determined for the current context residency (selected datacenter location in UI).
+   * The reason for this is to cater for scenarios where a parent account manages children that are located across different geographical locations to one another and therefore
+   * any data retrieval for views in the UI where child account roll-ups exist must be fetched from the appropriate location.
+   * The previous implementation ALWAYS calculated service endpoints for the default location of the primary account for the logged in user and so any roll ups for views for child accounts never worked eva!!!
+   *
+   */
+  public async resolveDefaultEndpoints( accountId:string, serviceList:string[] ) {
+    try {
+      const context = AlLocatorService.getContext();
+      const endpointsRequest:APIRequestParams = {
+        method: "POST",
+        url: AlLocatorService.resolveURL( AlLocation.GlobalAPI, `/endpoints/v1/${accountId}/residency/default/endpoints` ),
+        data: serviceList,
+        aimsAuthHeader: true
+      };
+      let response = await this.axiosRequest( endpointsRequest );
+      Object.entries( response.data ).forEach( ( [ serviceName, endpointHost ] ) => {
+          let host = endpointHost as string;
+          host = host.startsWith("http") ? host : `https://${host}`;      //  ensuring domains are prefixed with protocol
+          setJsonPath( this.endpointCache,
+                       [ context.environment, accountId, serviceName, AlApiClient.defaultResidency ],
+                       host );
+      } );
+      this.endpointCache;
+    } catch ( e ) {
+      this.fallbackResolveEndpoints( accountId, serviceList, AlApiClient.defaultResidency );
+    }
+  }
+
+  public lookupDefaultServiceEndpoint(accountId: string, serviceName: string) {
+        const context = AlLocatorService.getContext();
+        return getJsonPath<string>( this.endpointCache,
+                [ context.environment, accountId, serviceName, AlApiClient.defaultResidency ],
+            null );
+  }
+
   protected getGestaltAuthenticationURL():string {
       let residency = 'US';
       let environment = AlLocatorService.getCurrentEnvironment();
@@ -782,39 +823,6 @@ export class AlApiClient implements AlValidationSchemaProvider
     return result;
   }
 
-  /**
-   * Resolves accumulated endpoints data for the given account.
-   *
-   * Update Feb 2021
-   * ---------------
-   * This has been overhauled to deal with services whose endpoints now must be determined for the current context residency (selected datacenter location in UI).
-   * The reason for this is to cater for scenarios where a parent account manages children that are located across different geographical locations to one another and therefore
-   * any data retrieval for views in the UI where child account roll-ups exist must be fetched from the appropriate location.
-   * The previous implementation ALWAYS calculated service endpoints for the default location of the primary account for the logged in user and so any roll ups for views for child accounts never worked eva!!!
-   *
-   */
-  protected async resolveDefaultEndpoints( accountId:string, serviceList:string[] ) {
-    try {
-      const context = AlLocatorService.getContext();
-      const endpointsRequest:APIRequestParams = {
-        method: "POST",
-        url: AlLocatorService.resolveURL( AlLocation.GlobalAPI, `/endpoints/v1/${accountId}/residency/default/endpoints` ),
-        data: serviceList,
-        aimsAuthHeader: true
-      };
-      let response = await this.axiosRequest( endpointsRequest );
-      Object.entries( response.data ).forEach( ( [ serviceName, endpointHost ] ) => {
-          let host = endpointHost as string;
-          host = host.startsWith("http") ? host : `https://${host}`;      //  ensuring domains are prefixed with protocol
-          setJsonPath( this.endpointCache,
-                       [ context.environment, accountId, serviceName, AlApiClient.defaultResidency ],
-                       host );
-      } );
-    } catch ( e ) {
-      this.fallbackResolveEndpoints( accountId, serviceList, AlApiClient.defaultResidency );
-    }
-  }
-
   protected async resolveResidencyAwareEndpoints( accountId:string, serviceList:string[] ) {
     try {
       const context = AlLocatorService.getContext();
@@ -850,6 +858,7 @@ export class AlApiClient implements AlValidationSchemaProvider
                      [ context.environment, accountId, serviceName, residency ],
                      insightHost );
     } );
+    return this.endpointCache;
   }
 
   /**
