@@ -236,7 +236,7 @@ export class AlApiClient implements AlValidationSchemaProvider
 
       return response;
     } catch( e ) {
-      this.log(`APIClient::XHR GET [${fullUrl}] (FAILED, ${e["message"]})` )
+      this.log(`APIClient::XHR GET [${fullUrl}] (FAILED, ${e["message"]})` );
       throw e;
     } finally {
       delete this.transientReadCache[cacheKey];
@@ -376,7 +376,7 @@ export class AlApiClient implements AlValidationSchemaProvider
         this.executionRequestLog.push(logItem);
       }
 
-      this.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`)
+      this.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
 
     } catch( e ) {
       if (this.collectRequestLog) {
