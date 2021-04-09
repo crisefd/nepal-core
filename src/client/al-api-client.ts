@@ -188,9 +188,7 @@ export class AlApiClient implements AlValidationSchemaProvider
     if ( cacheTTL && ! normalized.disableCache ) {
       let cachedValue = this.getCachedValue( fullUrl );
       if ( cachedValue ) {
-        if ( this.verbose ) {
-          console.log(`APIClient::XHR GET ${fullUrl} (from cache)` );
-        }
+        this.log(`APIClient::XHR GET ${fullUrl} (from cache)` );
         return {
           data: cachedValue,
           status: 200,
@@ -202,9 +200,7 @@ export class AlApiClient implements AlValidationSchemaProvider
     }
     //  Check for existing in-flight requests for this resource
     if ( this.transientReadCache.hasOwnProperty( cacheKey ) ) {
-      if ( this.verbose ) {
-        console.log(`APIClient::XHR GET Re-using inflight retrieval [${fullUrl}]` );
-      }
+      this.log(`APIClient::XHR GET Re-using inflight retrieval [${fullUrl}]` );
       const result = await this.transientReadCache[cacheKey];
       return result;
     }
@@ -218,13 +214,9 @@ export class AlApiClient implements AlValidationSchemaProvider
       const duration = completed - start;
       if ( cacheTTL && ! normalized.disableCache ) {
         this.setCachedValue( cacheKey, response.data, cacheTTL );
-        if ( this.verbose ) {
-          console.log(`APIClient::XHR GET [${fullUrl}] in ${duration}ms (to cache, ${cacheTTL}ms)` );
-        }
+        this.log(`APIClient::XHR GET [${fullUrl}] in ${duration}ms (to cache, ${cacheTTL}ms)` );
       } else {
-        if ( this.verbose ) {
-          console.log(`APIClient::XHR GET [${fullUrl} in ${duration}ms (nocache)` );
-        }
+        this.log(`APIClient::XHR GET [${fullUrl} in ${duration}ms (nocache)` );
       }
 
       if (this.collectRequestLog || this.verbose) {
@@ -235,9 +227,7 @@ export class AlApiClient implements AlValidationSchemaProvider
           responseContentLength: +response.headers['content-length'],
           durationMs: duration
         };
-        if ( this.verbose ) {
-          console.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
-        }
+        this.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
 
         if (this.collectRequestLog) {
           this.executionRequestLog.push(logItem);
@@ -246,9 +236,7 @@ export class AlApiClient implements AlValidationSchemaProvider
 
       return response;
     } catch( e ) {
-      if ( this.verbose ) {
-        console.log(`APIClient::XHR GET [${fullUrl}] (FAILED, ${e["message"]})` );
-      }
+      this.log(`APIClient::XHR GET [${fullUrl}] (FAILED, ${e["message"]})` )
       throw e;
     } finally {
       delete this.transientReadCache[cacheKey];
@@ -388,9 +376,7 @@ export class AlApiClient implements AlValidationSchemaProvider
         this.executionRequestLog.push(logItem);
       }
 
-      if ( this.verbose ) {
-        console.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`);
-      }
+      this.log(`APIClient::XHR DETAILS ${JSON.stringify(logItem)}`)
 
     } catch( e ) {
       if (this.collectRequestLog) {
@@ -400,9 +386,7 @@ export class AlApiClient implements AlValidationSchemaProvider
         logItem.durationMs = duration;
         logItem.errorMessage = e["message"];
       }
-      if ( this.verbose ) {
-        console.log(`APIClient::XHR FAILED ${JSON.stringify(logItem)}`);
-      }
+      this.log(`APIClient::XHR FAILED ${JSON.stringify(logItem)}`);
       throw e;
     }
 
@@ -660,7 +644,7 @@ export class AlApiClient implements AlValidationSchemaProvider
                                                       data:any,
                                                       headers:any = {} ):Promise<ResponseType> {
       const actualResponse = await request;
-      const lastRequest:AxiosRequestConfig = this.executionRequestLog.length > 0 ? this.executionRequestLog[this.executionRequestLog.length - 1] : { method: "GET", url: "/nadazipzilch" };
+      const lastRequest:AxiosRequestConfig = this.executionRequestLog.length > 0 ? this.executionRequestLog[this.executionRequestLog.length - 1] : { method: "GET", url: "/nothing" };
 
       const error: AxiosResponse = {
           status,
@@ -740,7 +724,6 @@ export class AlApiClient implements AlValidationSchemaProvider
 
   protected async calculateRequestURL( params: APIRequestParams ):Promise<string> {
     let fullPath:string = null;
-    const serviceEndpointId = params.target_endpoint || params.service_name;
     if ( ! params.noEndpointsResolution
            && ! AlRuntimeConfiguration.getOption<boolean>( ConfigOption.DisableEndpointsResolution, false )
            && ( params.target_endpoint || ( params.service_name && params.service_stack === AlLocation.InsightAPI ) ) ) {
