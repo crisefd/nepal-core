@@ -59,7 +59,7 @@ stages:
     -
         name: Master Push - Publish
         when:
-            - push: ['master', 'Datacenter-Stuff']
+            - push: ['master']
         image: node:13
         compute_size: small
         commands:
